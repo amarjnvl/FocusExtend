@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>FocusGuard Settings</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f8f9fa;
+    }
+    
+    .header {
+      text-align: center;
+      color: #2c3e50;
+      margin-bottom: 30px;
+      padding: 20px;
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    
+    .section {
+      background: white;
+      margin: 20px 0;
+      padding: 25px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    
+    .section h2 {
+      color: #34495e;
+      border-bottom: 2px solid #3498db;
+      padding-bottom: 10px;
+    }
+    
+    input, select, button, textarea {
+      padding: 10px;
+      margin: 5px 0;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      font-size: 14px;
+    }
+    
+    button {
+      background-color: #3498db;
+      color: white;
+      border: none;
+      cursor: pointer;
+      padding: 12px 20px;
+    }
+    
+    button:hover {
+      background-color: #2980b9;
+    }
+    
+    .danger {
+      background-color: #e74c3c;
+    }
+    
+    .danger:hover {
+      background-color: #c0392b;
+    }
+    
+    .success {
+      background-color: #27ae60;
+    }
+    
+    .list-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px;
+      margin: 5px 0;
+      background-color: #f8f9fa;
+      border-radius: 5px;
+    }
+    
+    .strict-block {
+      background-color: #ffebee;
+      border-left: 4px solid #e74c3c;
+    }
+    
+    .focus-section {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    
+    .challenge-section {
+      background-color: #fff3cd;
+      border: 2px solid #ffc107;
+      padding: 20px;
+      border-radius: 10px;
+    }
+    
+    #challengeString {
+      font-family: 'Courier New', monospace;
+      font-size: 16px;
+      background-color: #f8f9fa;
+      padding: 15px;
+      border-radius: 5px;
+      word-break: break-all;
+      user-select: text;
+    }
+    
+    #challengeInput {
+      font-family: 'Courier New', monospace;
+      font-size: 16px;
+    }
+    
+    .warning-text {
+      color: #e74c3c;
+      font-weight: bold;
+      text-align: center;
+    }
+    
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🛡️ FocusGuard Settings</h1>
+    <p>Configure your productivity and focus settings</p>
+  </div>
+
+  <div class="section">
+    <h2>📋 Blocked Websites</h2>
+    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+      <input type="text" id="newBlockedUrl" placeholder="Enter website URL (e.g., facebook.com)" style="flex: 1;">
+      <select id="blockMode">
+        <option value="normal">Normal Block</option>
+        <option value="strict">Strict Block</option>
+      </select>
+      <button id="addBlocked">Add Website</button>
+    </div>
+    
+    <div id="strictBlockOptions" class="hidden" style="margin: 10px 0;">
+      <input type="number" id="strictDuration" placeholder="Duration" min="1" max="8760" style="width: 100px;">
+      <select id="strictUnit">
+        <option value="hours">Hours</option>
+        <option value="days">Days</option>
+        <option value="weeks">Weeks</option>
+      </select>
+      <p class="warning-text">⚠️ Strict blocks cannot be removed until timer expires!</p>
+    </div>
+    
+    <div id="blockedList"></div>
+  </div>
+
+  <div class="section">
+    <h2>🎯 Focus Mode Whitelist</h2>
+    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+      <input type="text" id="newWhitelistUrl" placeholder="Enter allowed website (e.g., github.com)" style="flex: 1;">
+      <button id="addWhitelist">Add to Whitelist</button>
+    </div>
+    <div id="whitelistList"></div>
+    
+    <div class="focus-section" style="margin-top: 20px;">
+      <div>
+        <h3>Start Focus Session</h3>
+        <input type="number" id="focusSessionDuration" placeholder="Duration (minutes)" min="5" max="480">
+        <button id="startFocusSession" class="success">Start Session</button>
+      </div>
+      <div id="focusSessionStatus"></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🕵️ Incognito Mode Control</h2>
+    <label>
+      <input type="checkbox" id="blockIncognito"> Block Incognito Mode
+    </label>
+    <p>When enabled, prevents opening any incognito windows or tabs.</p>
+  </div>
+
+  <div class="section challenge-section">
+    <h2>🚫 Request Extension Disable</h2>
+    <p>To disable this extension, you must complete the following challenge:</p>
+    
+    <div id="challengeStep1">
+      <button id="generateChallenge" class="danger">Generate Disable Challenge</button>
+    </div>
+    
+    <div id="challengeStep2" class="hidden">
+      <h3>Step 1: Copy this string exactly (no copy-paste allowed):</h3>
+      <div id="challengeString"></div>
+      
+      <h3>Step 2: Type the string below:</h3>
+      <input type="text" id="challengeInput" placeholder="Type the challenge string here">
+      <button id="verifyChallenge">Verify & Unlock Disable</button>
+      
+      <p class="warning-text">You must type the entire string manually. Copy-paste is disabled.</p>
+    </div>
+    
+    <div id="challengeSuccess" class="hidden">
+      <h3 style="color: #27ae60;">✅ Challenge Complete!</h3>
+      <p>You can now disable the extension from chrome://extensions/</p>
+      <button id="resetChallenge">Reset</button>
+    </div>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>

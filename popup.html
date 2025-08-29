@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      width: 350px;
+      padding: 20px;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    
+    .header {
+      text-align: center;
+      color: #2c3e50;
+      margin-bottom: 20px;
+    }
+    
+    .section {
+      margin-bottom: 15px;
+      padding: 10px;
+      border: 1px solid #e0e0e0;
+      border-radius: 5px;
+    }
+    
+    .section h3 {
+      margin: 0 0 10px 0;
+      color: #34495e;
+      font-size: 14px;
+    }
+    
+    input, select, button {
+      width: 100%;
+      padding: 8px;
+      margin: 5px 0;
+      border: 1px solid #ddd;
+      border-radius: 3px;
+      box-sizing: border-box;
+    }
+    
+    button {
+      background-color: #3498db;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    
+    button:hover {
+      background-color: #2980b9;
+    }
+    
+    .danger {
+      background-color: #e74c3c;
+    }
+    
+    .danger:hover {
+      background-color: #c0392b;
+    }
+    
+    .success {
+      background-color: #27ae60;
+    }
+    
+    .success:hover {
+      background-color: #229954;
+    }
+    
+    .status {
+      text-align: center;
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 3px;
+      font-weight: bold;
+    }
+    
+    .active {
+      background-color: #d5f4e6;
+      color: #27ae60;
+    }
+    
+    .inactive {
+      background-color: #f8f9fa;
+      color: #6c757d;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h2>🛡️ FocusGuard</h2>
+  </div>
+
+  <div class="section">
+    <h3>Quick Block Website</h3>
+    <input type="text" id="quickBlockUrl" placeholder="Enter website URL (e.g., facebook.com)">
+    <select id="quickBlockMode">
+      <option value="normal">Normal Block</option>
+      <option value="strict">Strict Block</option>
+    </select>
+    <div id="strictDurationDiv" style="display: none;">
+      <input type="number" id="strictHours" placeholder="Hours" min="1" max="8760">
+      <select id="strictUnit">
+        <option value="hours">Hours</option>
+        <option value="days">Days</option>
+        <option value="weeks">Weeks</option>
+      </select>
+    </div>
+    <button id="addQuickBlock">Add Block</button>
+  </div>
+
+  <div class="section">
+    <h3>Focus Session</h3>
+    <div id="focusStatus" class="status inactive">No active focus session</div>
+    <input type="text" id="focusWhitelist" placeholder="Allowed sites (comma-separated)">
+    <input type="number" id="focusDuration" placeholder="Duration in minutes" min="5" max="480">
+    <button id="startFocus" class="success">Start Focus Session</button>
+    <button id="endFocus" class="danger" style="display: none;">End Session (Timer Only)</button>
+  </div>
+
+  <div class="section">
+    <h3>Quick Actions</h3>
+    <button id="openOptions">Open Full Settings</button>
+    <button id="toggleIncognito">Toggle Incognito Block</button>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>FocusGuard - Website Blocked</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+    }
+    .block-container {
+      text-align: center;
+      padding: 40px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      max-width: 600px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+    h1 { font-size: 3em; margin-bottom: 20px; }
+    h2 { font-size: 1.5em; margin-bottom: 30px; opacity: 0.9; }
+    button {
+      background: rgba(255, 255, 255, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: white;
+      padding: 15px 30px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 16px;
+      margin: 10px;
+      transition: all 0.3s ease;
+    }
+    button:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+    .info-box {
+      background: rgba(0, 0, 0, 0.2);
+      padding: 20px;
+      border-radius: 10px;
+      margin: 20px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="block-container">
+    <h1>🛡️</h1>
+    <h2>FocusGuard</h2>
+    <div class="info-box">
+      <p id="blockMessage">This page has been blocked.</p>
+    </div>
+    <button onclick="history.back()">Go Back</button>
+  </div>
+
+  <script>
+    // Parse URL parameters to show appropriate message
+    const urlParams = new URLSearchParams(window.location.search);
+    const reason = urlParams.get('reason');
+    const site = urlParams.get('site');
+    
+    const messageEl = document.getElementById('blockMessage');
+    
+    switch (reason) {
+      case 'incognito':
+        messageEl.textContent = 'Incognito mode is currently blocked by FocusGuard.';
+        break;
+      case 'focus':
+        messageEl.textContent = 'This site is blocked during your active focus session.';
+        break;
+      case 'strict':
+        messageEl.textContent = `${site} is under a strict block that cannot be removed.`;
+        break;
+      default:
+        messageEl.textContent = site ? `${site} is currently blocked.` : 'This page has been blocked.';
+    }
+  </script>
+</body>
+</html>
