@@ -3,15 +3,7 @@
   "name": "FocusGuard",
   "version": "1.0.0",
   "description": "A strict productivity extension that helps users avoid time-wasting websites and stay focused.",
-  "permissions": [
-    "storage",
-    "declarativeNetRequest",
-    "declarativeNetRequestWithHostAccess",
-    "tabs",
-    "windows",
-    "alarms",
-    "activeTab"
-  ],
+  "permissions": ["storage", "declarativeNetRequest", "alarms", "tabs"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"
@@ -26,25 +18,6 @@
       "128": "icons/icon128.png"
     }
   },
-  "options_page": "options.html",
-  "content_scripts": [
-    {
-      "matches": ["<all_urls>"],
-      "js": ["content_scripts/blocker.js"],
-      "run_at": "document_start",
-      "all_frames": false
-    }
-  ],
-  "declarative_net_request": {
-    "rule_resources": [
-      {
-        "id": "focusguard_rules",
-        "enabled": true,
-        "path": "rules.json"
-      }
-    ]
-  },
-  "incognito": "spanning",
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",

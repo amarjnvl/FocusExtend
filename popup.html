@@ -4,102 +4,28 @@
   <meta charset="utf-8">
   <style>
     body {
-      width: 350px;
+      width: 400px;
       padding: 20px;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
-    
-    .header {
-      text-align: center;
-      color: #2c3e50;
-      margin-bottom: 20px;
-    }
-    
-    .section {
-      margin-bottom: 15px;
-      padding: 10px;
-      border: 1px solid #e0e0e0;
-      border-radius: 5px;
-    }
-    
-    .section h3 {
-      margin: 0 0 10px 0;
-      color: #34495e;
-      font-size: 14px;
-    }
-    
-    input, select, button {
-      width: 100%;
+    .header { text-align: center; color: #2c3e50; margin-bottom: 20px; }
+    .section { margin-bottom: 15px; padding: 10px; border: 1px solid #e0e0e0; border-radius: 5px; }
+    .section h3 { margin: 0 0 10px 0; color: #34495e; font-size: 14px; }
+    input, textarea, button { width: 100%; padding: 8px; margin: 5px 0; border: 1px solid #ddd; border-radius: 3px; box-sizing: border-box; }
+    textarea { height: 80px; resize: vertical; }
+    button { background-color: #27ae60; color: white; border: none; cursor: pointer; }
+    button:hover { background-color: #229954; }
+    button:disabled { background-color: #95a5a6; cursor: not-allowed; }
+    .status { text-align: center; padding: 10px; margin: 10px 0; border-radius: 3px; font-weight: bold; }
+    .active { background-color: #d5f4e6; color: #27ae60; }
+    .inactive { background-color: #f8f9fa; color: #6c757d; }
+    .youtube-help {
+      background-color: #e3f2fd;
       padding: 8px;
-      margin: 5px 0;
-      border: 1px solid #ddd;
       border-radius: 3px;
-      box-sizing: border-box;
-    }
-    
-    button {
-      background-color: #3498db;
-      color: white;
-      border: none;
-      cursor: pointer;
-    }
-    
-    button:hover {
-      background-color: #2980b9;
-    }
-    
-    .danger {
-      background-color: #e74c3c;
-    }
-    
-    .danger:hover {
-      background-color: #c0392b;
-    }
-    
-    .success {
-      background-color: #27ae60;
-    }
-    
-    .success:hover {
-      background-color: #229954;
-    }
-    
-    .status {
-      text-align: center;
-      padding: 10px;
-      margin: 10px 0;
-      border-radius: 3px;
-      font-weight: bold;
-    }
-    
-    .active {
-      background-color: #d5f4e6;
-      color: #27ae60;
-    }
-    
-    .inactive {
-      background-color: #f8f9fa;
-      color: #6c757d;
-    }
-
-    .duration-inputs {
-      display: flex;
-      gap: 5px;
-    }
-
-    .duration-inputs input {
-      flex: 1;
-    }
-
-    .duration-inputs select {
-      flex: 1;
-    }
-
-    .password-warning {
       font-size: 12px;
-      color: #e74c3c;
-      text-align: center;
       margin: 5px 0;
+      color: #1976d2;
     }
   </style>
 </head>
@@ -108,42 +34,33 @@
     <h2>🛡️ FocusGuard</h2>
   </div>
 
-  <div class="section">
-    <h3>Quick Block Website</h3>
-    <input type="text" id="quickBlockUrl" placeholder="Enter website URL (e.g., facebook.com)">
-    <select id="quickBlockMode">
-      <option value="normal">Normal Block (can unblock with password)</option>
-      <option value="strict">Strict Block (timer-based, cannot unblock)</option>
-    </select>
-    <div id="strictDurationDiv" style="display: none;">
-      <div class="duration-inputs">
-        <input type="number" id="strictHours" placeholder="Amount" min="1" max="8760">
-        <select id="strictUnit">
-          <option value="minutes">Minutes</option>
-          <option value="hours">Hours</option>
-          <option value="days">Days</option>
-          <option value="weeks">Weeks</option>
-        </select>
-      </div>
-      <div class="password-warning">⚠️ Strict blocks cannot be removed until timer expires!</div>
-    </div>
-    <button id="addQuickBlock">Add Block</button>
-  </div>
-
-  <div class="section">
+  <div class="section" id="focusSection">
     <h3>Focus Session</h3>
     <div id="focusStatus" class="status inactive">No active focus session</div>
-    <input type="text" id="focusWhitelist" placeholder="Allowed sites (comma-separated)">
+    
+    <label>Regular Websites (full access):</label>
+    <textarea id="focusWhitelist" placeholder="Allowed sites, one per line (e.g., wikipedia.org, github.com)"></textarea>
+    
+    <label>YouTube Channels/Playlists (selective access):</label>
+    <div class="youtube-help">
+      Examples:<br>
+      • Channel: https://youtube.com/c/channelname<br>
+      • Playlist: https://youtube.com/playlist?list=PLxxx<br>
+      • Video: https://youtube.com/watch?v=videoid
+    </div>
+    <textarea id="youtubeAllowed" placeholder="YouTube URLs, one per line"></textarea>
+    
     <input type="number" id="focusDuration" placeholder="Duration in minutes" min="5" max="480">
     <button id="startFocus" class="success">Start Focus Session</button>
-    <button id="endFocus" class="danger" style="display: none;">End Session (Timer Only)</button>
   </div>
-
-  <div class="section">
-    <h3>Quick Actions</h3>
-    <button id="openOptions">Open Full Settings</button>
-    <button id="toggleIncognito">Toggle Incognito Block</button>
-    <button id="setPassword">Set Master Password</button>
+  
+  <div class="section" id="activeSessionSection" style="display: none;">
+    <h3>Focus Session Active</h3>
+    <div id="timerDisplay" class="status active"></div>
+    <h4>Allowed Sites:</h4>
+    <ul id="activeWhitelist"></ul>
+    <h4>YouTube Allowed:</h4>
+    <ul id="activeYoutubeList"></ul>
   </div>
 
   <script src="popup.js"></script>
