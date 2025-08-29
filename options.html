@@ -68,6 +68,14 @@
       background-color: #27ae60;
     }
     
+    .warning {
+      background-color: #f39c12;
+    }
+    
+    .warning:hover {
+      background-color: #e67e22;
+    }
+    
     .list-item {
       display: flex;
       justify-content: space-between;
@@ -82,6 +90,11 @@
       background-color: #ffebee;
       border-left: 4px solid #e74c3c;
     }
+
+    .temp-unblocked {
+      background-color: #e8f5e8;
+      border-left: 4px solid #27ae60;
+    }
     
     .focus-section {
       display: flex;
@@ -92,6 +105,13 @@
     .challenge-section {
       background-color: #fff3cd;
       border: 2px solid #ffc107;
+      padding: 20px;
+      border-radius: 10px;
+    }
+
+    .password-section {
+      background-color: #e3f2fd;
+      border: 2px solid #2196f3;
       padding: 20px;
       border-radius: 10px;
     }
@@ -116,9 +136,31 @@
       font-weight: bold;
       text-align: center;
     }
+
+    .info-text {
+      color: #2196f3;
+      font-style: italic;
+      text-align: center;
+    }
     
     .hidden {
       display: none;
+    }
+
+    .duration-inputs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+
+    .duration-inputs input {
+      flex: 1;
+      width: auto;
+    }
+
+    .duration-inputs select {
+      flex: 1;
+      width: auto;
     }
   </style>
 </head>
@@ -126,6 +168,16 @@
   <div class="header">
     <h1>🛡️ FocusGuard Settings</h1>
     <p>Configure your productivity and focus settings</p>
+  </div>
+
+  <div class="section password-section">
+    <h2>🔐 Master Password</h2>
+    <p class="info-text">Set a master password to temporarily unblock normal blocks when needed (15 minutes each time)</p>
+    <div style="display: flex; gap: 10px; align-items: center;">
+      <input type="password" id="masterPasswordInput" placeholder="Enter master password (min 4 characters)" style="flex: 1;">
+      <button id="setMasterPassword" class="warning">Set Password</button>
+    </div>
+    <div id="passwordStatus"></div>
   </div>
 
   <div class="section">
@@ -140,12 +192,15 @@
     </div>
     
     <div id="strictBlockOptions" class="hidden" style="margin: 10px 0;">
-      <input type="number" id="strictDuration" placeholder="Duration" min="1" max="8760" style="width: 100px;">
-      <select id="strictUnit">
-        <option value="hours">Hours</option>
-        <option value="days">Days</option>
-        <option value="weeks">Weeks</option>
-      </select>
+      <div class="duration-inputs">
+        <input type="number" id="strictDuration" placeholder="Amount" min="1" max="8760">
+        <select id="strictUnit">
+          <option value="minutes">Minutes</option>
+          <option value="hours">Hours</option>
+          <option value="days">Days</option>
+          <option value="weeks">Weeks</option>
+        </select>
+      </div>
       <p class="warning-text">⚠️ Strict blocks cannot be removed until timer expires!</p>
     </div>
     

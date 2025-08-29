@@ -3,6 +3,7 @@
 class FocusGuardCore {
   constructor() {
     this.ruleIdCounter = 1;
+    this.temporaryUnblocks = new Map(); // Store temporary unblocks
     this.init();
   }
 
@@ -16,6 +17,8 @@ class FocusGuardCore {
       incognitoBlocked: false,
       disableUnlocked: false,
       disableChallenge: null,
+      masterPassword: null, // Add password storage
+      temporaryUnblocks: {}, // Store temporary unblocks with expiry
     };
 
     const stored = await chrome.storage.local.get(Object.keys(defaultSettings));
@@ -29,6 +32,7 @@ class FocusGuardCore {
     this.loadBlockingRules();
     this.checkStrictTimers();
     this.monitorIncognito();
+    this.setupMessageHandlers();
   }
 
   setupEventListeners() {
@@ -43,6 +47,101 @@ class FocusGuardCore {
 
     // Handle tab updates for focus mode
     chrome.tabs.onUpdated.addListener(this.handleTabUpdate.bind(this));
+  }
+
+  setupMessageHandlers() {
+    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+      switch (request.action) {
+        case "addStrictBlock":
+          this.addStrictBlock(request.url, request.duration);
+          break;
+        case "startFocusSession":
+          this.startFocusSession(request.duration, request.whitelist);
+          break;
+        case "requestTemporaryUnblock":
+          this.handleTemporaryUnblockRequest(
+            request.url,
+            request.password
+          ).then((result) => sendResponse(result));
+          return true; // Keep message channel open for async response
+        case "setMasterPassword":
+          this.setMasterPassword(request.password).then((result) =>
+            sendResponse(result)
+          );
+          return true;
+      }
+    });
+  }
+
+  async setMasterPassword(password) {
+    if (!password || password.length < 4) {
+      return {
+        success: false,
+        message: "Password must be at least 4 characters",
+      };
+    }
+
+    // Hash password for basic security (simple hash for demo)
+    const hashedPassword = btoa(password + "focusguard_salt");
+    await chrome.storage.local.set({ masterPassword: hashedPassword });
+    return { success: true, message: "Password set successfully" };
+  }
+
+  async verifyPassword(password) {
+    const { masterPassword } = await chrome.storage.local.get("masterPassword");
+
+    if (!masterPassword) {
+      return false; // No password set
+    }
+
+    const hashedInput = btoa(password + "focusguard_salt");
+    return hashedInput === masterPassword;
+  }
+
+  async handleTemporaryUnblockRequest(url, password) {
+    const { masterPassword } = await chrome.storage.local.get("masterPassword");
+
+    // If no password is set, prompt to set one
+    if (!masterPassword) {
+      return {
+        success: false,
+        message:
+          "No master password set. Please set a password in the extension options first.",
+        needsPasswordSetup: true,
+      };
+    }
+
+    // Verify password
+    const isValidPassword = await this.verifyPassword(password);
+    if (!isValidPassword) {
+      return { success: false, message: "Incorrect password" };
+    }
+
+    // Create temporary unblock (15 minutes)
+    const expiry = new Date();
+    expiry.setTime(expiry.getTime() + 15 * 60 * 1000); // 15 minutes
+
+    const { temporaryUnblocks } = await chrome.storage.local.get(
+      "temporaryUnblocks"
+    );
+    temporaryUnblocks[url] = {
+      active: true,
+      expiry: expiry.toISOString(),
+      created: new Date().toISOString(),
+    };
+
+    await chrome.storage.local.set({ temporaryUnblocks });
+
+    // Set alarm to remove temporary unblock
+    chrome.alarms.create(`temp_unblock_${url}`, { when: expiry.getTime() });
+
+    // Reload blocking rules
+    await this.loadBlockingRules();
+
+    return {
+      success: true,
+      message: "Site temporarily unblocked for 15 minutes",
+    };
   }
 
   async handleWindowCreated(window) {
@@ -69,6 +168,20 @@ class FocusGuardCore {
     } else if (alarm.name.startsWith("focus_")) {
       const sessionId = alarm.name.replace("focus_", "");
       await this.endFocusSession(sessionId);
+    } else if (alarm.name.startsWith("temp_unblock_")) {
+      const url = alarm.name.replace("temp_unblock_", "");
+      await this.removeTemporaryUnblock(url);
+    }
+  }
+
+  async removeTemporaryUnblock(url) {
+    const { temporaryUnblocks } = await chrome.storage.local.get(
+      "temporaryUnblocks"
+    );
+    if (temporaryUnblocks[url]) {
+      temporaryUnblocks[url].active = false;
+      await chrome.storage.local.set({ temporaryUnblocks });
+      await this.loadBlockingRules(); // Reload rules to re-enable blocking
     }
   }
 
@@ -77,7 +190,8 @@ class FocusGuardCore {
       if (
         changes.blockedSites ||
         changes.strictBlocks ||
-        changes.focusSessions
+        changes.focusSessions ||
+        changes.temporaryUnblocks
       ) {
         this.loadBlockingRules();
       }
@@ -106,19 +220,25 @@ class FocusGuardCore {
   }
 
   async loadBlockingRules() {
-    const { blockedSites, strictBlocks, focusSessions } =
+    const { blockedSites, strictBlocks, focusSessions, temporaryUnblocks } =
       await chrome.storage.local.get([
         "blockedSites",
         "strictBlocks",
         "focusSessions",
+        "temporaryUnblocks",
       ]);
 
     let rules = [];
     let ruleId = 1;
 
-    // Add normal blocked sites
+    // Add normal blocked sites (but skip if temporarily unblocked)
     for (const site of blockedSites) {
-      if (!strictBlocks[site.url]) {
+      const isTemporarilyUnblocked =
+        temporaryUnblocks[site.url] &&
+        temporaryUnblocks[site.url].active &&
+        new Date(temporaryUnblocks[site.url].expiry) > new Date();
+
+      if (!strictBlocks[site.url] && !isTemporarilyUnblocked) {
         rules.push({
           id: ruleId++,
           priority: 1,
@@ -139,7 +259,7 @@ class FocusGuardCore {
       }
     }
 
-    // Add strict blocked sites
+    // Add strict blocked sites (cannot be temporarily unblocked)
     for (const [url, blockData] of Object.entries(strictBlocks)) {
       if (blockData.active && new Date(blockData.expiry) > new Date()) {
         rules.push({

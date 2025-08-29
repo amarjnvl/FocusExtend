@@ -47,6 +47,35 @@
       border-radius: 10px;
       margin: 20px 0;
     }
+    .unblock-section {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 20px;
+      border-radius: 10px;
+      margin: 20px 0;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    .unblock-section input {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: white;
+      padding: 10px;
+      border-radius: 5px;
+      margin: 10px;
+      width: 200px;
+      text-align: center;
+    }
+    .unblock-section input::placeholder {
+      color: rgba(255, 255, 255, 0.7);
+    }
+    .success-btn {
+      background: rgba(39, 174, 96, 0.8) !important;
+    }
+    .success-btn:hover {
+      background: rgba(39, 174, 96, 1) !important;
+    }
+    .hidden {
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -56,6 +85,17 @@
     <div class="info-box">
       <p id="blockMessage">This page has been blocked.</p>
     </div>
+    
+    <!-- Unblock section for normal blocks -->
+    <div id="unblockSection" class="unblock-section hidden">
+      <h3>🔓 Temporarily Unblock</h3>
+      <p>Enter your master password to unblock this site for 15 minutes:</p>
+      <input type="password" id="unblockPassword" placeholder="Enter master password">
+      <br>
+      <button id="unblockBtn" class="success-btn">Unblock for 15 Minutes</button>
+      <div id="unblockStatus"></div>
+    </div>
+    
     <button onclick="history.back()">Go Back</button>
   </div>
 
@@ -66,6 +106,7 @@
     const site = urlParams.get('site');
     
     const messageEl = document.getElementById('blockMessage');
+    const unblockSection = document.getElementById('unblockSection');
     
     switch (reason) {
       case 'incognito':
@@ -79,7 +120,46 @@
         break;
       default:
         messageEl.textContent = site ? `${site} is currently blocked.` : 'This page has been blocked.';
+        // Show unblock option for normal blocks
+        if (site) {
+          unblockSection.classList.remove('hidden');
+        }
     }
+    
+    // Handle unblock functionality
+    document.getElementById('unblockBtn').addEventListener('click', async () => {
+      const password = document.getElementById('unblockPassword').value;
+      const statusDiv = document.getElementById('unblockStatus');
+      
+      if (!password) {
+        statusDiv.innerHTML = '<p style="color: #e74c3c;">Please enter your password</p>';
+        return;
+      }
+      
+      try {
+        const response = await chrome.runtime.sendMessage({
+          action: 'requestTemporaryUnblock',
+          url: site,
+          password: password
+        });
+        
+        if (response.success) {
+          statusDiv.innerHTML = '<p style="color: #27ae60;">✅ Site unblocked! Redirecting...</p>';
+          // Redirect to the original site after a short delay
+          setTimeout(() => {
+            window.location.href = `https://${site}`;
+          }, 1500);
+        } else {
+          if (response.needsPasswordSetup) {
+            statusDiv.innerHTML = '<p style="color: #e74c3c;">❌ No master password set. Please set one in the extension options first.</p>';
+          } else {
+            statusDiv.innerHTML = '<p style="color: #e74c3c;">❌ ' + response.message + '</p>';
+          }
+        }
+      } catch (error) {
+        statusDiv.innerHTML = '<p style="color: #e74c3c;">❌ Error: ' + error.message + '</p>';
+      }
+    });
   </script>
 </body>
 </html>

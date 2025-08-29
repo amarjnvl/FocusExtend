@@ -18,11 +18,12 @@ class FocusGuardContent {
     const domain = window.location.hostname.replace(/^www\./, "");
 
     // Get current settings
-    const { blockedSites, strictBlocks, focusSessions } =
+    const { blockedSites, strictBlocks, focusSessions, temporaryUnblocks } =
       await chrome.storage.local.get([
         "blockedSites",
         "strictBlocks",
         "focusSessions",
+        "temporaryUnblocks"
       ]);
 
     // Check for focus session
@@ -44,7 +45,18 @@ class FocusGuardContent {
     const blockedSite = blockedSites.find((site) =>
       this.isDomainBlocked(domain, site.url)
     );
+    
     if (blockedSite) {
+      // Check if temporarily unblocked
+      const isTemporarilyUnblocked = temporaryUnblocks && temporaryUnblocks[blockedSite.url] &&
+        temporaryUnblocks[blockedSite.url].active &&
+        new Date(temporaryUnblocks[blockedSite.url].expiry) > new Date();
+
+      if (isTemporarilyUnblocked) {
+        // Site is temporarily unblocked, allow access
+        return;
+      }
+
       // Check if it's a strict block
       const strictBlock = strictBlocks[blockedSite.url];
       if (
@@ -126,6 +138,10 @@ class FocusGuardContent {
         button:hover {
           background: rgba(255, 255, 255, 0.3);
         }
+        .success {
+          background: rgba(46, 204, 113, 0.6);
+          border-color: rgba(46, 204, 113, 0.8);
+        }
         .danger {
           background: rgba(231, 76, 60, 0.6);
           border-color: rgba(231, 76, 60, 0.8);
@@ -137,12 +153,52 @@ class FocusGuardContent {
           margin: 20px 0;
         }
         input {
-          padding: 10px;
+          padding: 15px;
           border: none;
-          border-radius: 5px;
+          border-radius: 10px;
           margin: 10px;
           width: 250px;
           text-align: center;
+          font-size: 16px;
+          background: rgba(255, 255, 255, 0.9);
+          color: #333;
+        }
+        input::placeholder {
+          color: #666;
+        }
+        .password-section {
+          background: rgba(52, 152, 219, 0.2);
+          border: 2px solid rgba(52, 152, 219, 0.5);
+          padding: 20px;
+          border-radius: 15px;
+          margin: 20px 0;
+        }
+        .warning-text {
+          color: #f39c12;
+          font-weight: bold;
+          margin: 10px 0;
+        }
+        .success-text {
+          color: #2ecc71;
+          font-weight: bold;
+        }
+        .error-text {
+          color: #e74c3c;
+          font-weight: bold;
+        }
+        #unblockResult {
+          margin: 15px 0;
+          padding: 10px;
+          border-radius: 8px;
+          display: none;
+        }
+        .result-success {
+          background: rgba(46, 204, 113, 0.3);
+          border: 1px solid rgba(46, 204, 113, 0.6);
+        }
+        .result-error {
+          background: rgba(231, 76, 60, 0.3);
+          border: 1px solid rgba(231, 76, 60, 0.6);
         }
       </style>
     `;
@@ -157,9 +213,16 @@ class FocusGuardContent {
             <h2>Website Blocked</h2>
             <div class="info-box">
               <p><strong>${url}</strong> is currently blocked.</p>
-              <p>This is a normal block. You can temporarily unblock it using your password.</p>
+              <p>This is a normal block. You can temporarily unblock it using your master password.</p>
             </div>
-            <button id="requestUnblock">Request Temporary Unblock</button>
+            <div class="password-section">
+              <h3>🔓 Temporary Unblock (15 minutes)</h3>
+              <input type="password" id="passwordInput" placeholder="Enter master password">
+              <br>
+              <button id="requestUnblock" class="success">Unblock Temporarily</button>
+              <div id="unblockResult"></div>
+              <p class="warning-text">⚠️ You need to set a master password in extension settings first</p>
+            </div>
             <button onclick="history.back()">Go Back</button>
           </div>
         `;
@@ -168,7 +231,19 @@ class FocusGuardContent {
       case "strict":
         const expiry = new Date(additionalData.expiry);
         const remaining = Math.max(0, expiry.getTime() - Date.now());
-        const remainingHours = Math.ceil(remaining / (1000 * 60 * 60));
+        
+        // Format remaining time appropriately
+        let remainingText;
+        if (remaining < 60 * 60 * 1000) { // Less than 1 hour
+          const remainingMinutes = Math.ceil(remaining / (1000 * 60));
+          remainingText = `${remainingMinutes} minute${remainingMinutes !== 1 ? 's' : ''}`;
+        } else if (remaining < 24 * 60 * 60 * 1000) { // Less than 1 day
+          const remainingHours = Math.ceil(remaining / (1000 * 60 * 60));
+          remainingText = `${remainingHours} hour${remainingHours !== 1 ? 's' : ''}`;
+        } else {
+          const remainingDays = Math.ceil(remaining / (1000 * 60 * 60 * 24));
+          remainingText = `${remainingDays} day${remainingDays !== 1 ? 's' : ''}`;
+        }
 
         content = `
           <div class="block-container">
@@ -176,8 +251,9 @@ class FocusGuardContent {
             <h2>Strict Block Active</h2>
             <div class="info-box">
               <p><strong>${url}</strong> is under strict block.</p>
-              <p><strong>Time Remaining:</strong> ${remainingHours} hours</p>
-              <p class="danger">⚠️ This block cannot be removed until the timer expires.</p>
+              <p><strong>Time Remaining:</strong> ${remainingText}</p>
+              <p class="error-text">⚠️ This block cannot be removed until the timer expires.</p>
+              <p>Strict blocks are designed to help you stay focused without the temptation to override them.</p>
             </div>
             <button onclick="history.back()">Go Back</button>
           </div>
@@ -197,11 +273,12 @@ class FocusGuardContent {
             <h1>🎯</h1>
             <h2>Focus Session Active</h2>
             <div class="info-box">
-              <p>You're in a focus session!</p>
+              <p>You're in a focus session! Stay productive!</p>
               <p><strong>Time Remaining:</strong> ${remainingMinutes} minutes</p>
               <p><strong>Allowed sites:</strong> ${additionalData.whitelist.join(
                 ", "
               )}</p>
+              <p class="success-text">💡 Focus sessions help you maintain productivity by limiting distractions.</p>
             </div>
             <button onclick="history.back()">Go Back</button>
           </div>
@@ -216,6 +293,7 @@ class FocusGuardContent {
             <div class="info-box">
               <p>Incognito mode is currently disabled by FocusGuard.</p>
               <p>Use regular browsing mode to access websites.</p>
+              <p class="warning-text">This helps maintain accountability and prevents bypassing blocks.</p>
             </div>
             <button onclick="window.close()">Close Window</button>
           </div>
@@ -239,19 +317,42 @@ class FocusGuardContent {
 
   setupBlockPageListeners(type, url) {
     const requestUnblock = document.getElementById("requestUnblock");
+    const passwordInput = document.getElementById("passwordInput");
+    const resultDiv = document.getElementById("unblockResult");
+    
     if (requestUnblock && type === "normal") {
+      // Handle Enter key in password input
+      if (passwordInput) {
+        passwordInput.addEventListener("keypress", (e) => {
+          if (e.key === "Enter") {
+            this.requestTemporaryUnblock(url);
+          }
+        });
+      }
+
       requestUnblock.addEventListener("click", () => {
-        const password = prompt(
-          "Enter your FocusGuard password to temporarily unblock this site:"
-        );
-        if (password) {
-          this.requestTemporaryUnblock(url, password);
-        }
+        this.requestTemporaryUnblock(url);
       });
     }
   }
 
-  async requestTemporaryUnblock(url, password) {
+  async requestTemporaryUnblock(url) {
+    const passwordInput = document.getElementById("passwordInput");
+    const resultDiv = document.getElementById("unblockResult");
+    const requestBtn = document.getElementById("requestUnblock");
+    
+    const password = passwordInput.value;
+    
+    if (!password) {
+      this.showUnblockResult("Please enter your master password", "error");
+      return;
+    }
+
+    // Disable button and show loading
+    requestBtn.disabled = true;
+    requestBtn.textContent = "Checking...";
+    this.showUnblockResult("Verifying password...", "info");
+
     // Send message to background script to verify password and create temporary unblock
     chrome.runtime.sendMessage(
       {
@@ -260,14 +361,42 @@ class FocusGuardContent {
         password: password,
       },
       (response) => {
+        requestBtn.disabled = false;
+        requestBtn.textContent = "Unblock Temporarily";
+        
         if (response && response.success) {
-          // Reload the page to allow access
-          window.location.reload();
+          this.showUnblockResult("✅ Success! Reloading page...", "success");
+          // Small delay before reload to show success message
+          setTimeout(() => {
+            window.location.reload();
+          }, 1500);
+        } else if (response && response.needsPasswordSetup) {
+          this.showUnblockResult("❌ No master password set. Please go to extension settings to set one first.", "error");
         } else {
-          alert("Incorrect password. Access denied.");
+          this.showUnblockResult(
+            response ? `❌ ${response.message}` : "❌ Failed to unblock. Please try again.",
+            "error"
+          );
+          passwordInput.value = ""; // Clear password on error
         }
       }
     );
+  }
+
+  showUnblockResult(message, type) {
+    const resultDiv = document.getElementById("unblockResult");
+    if (resultDiv) {
+      resultDiv.textContent = message;
+      resultDiv.className = `result-${type}`;
+      resultDiv.style.display = "block";
+      
+      // Hide after 5 seconds for info messages
+      if (type === "info") {
+        setTimeout(() => {
+          resultDiv.style.display = "none";
+        }, 5000);
+      }
+    }
   }
 
   isDomainBlocked(currentDomain, blockedUrl) {

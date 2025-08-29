@@ -13,6 +13,11 @@ class FocusGuardOptions {
   }
 
   setupEventListeners() {
+    // Password management
+    document
+      .getElementById("setMasterPassword")
+      .addEventListener("click", this.handleSetMasterPassword.bind(this));
+
     // Blocked sites
     document
       .getElementById("blockMode")
@@ -46,6 +51,53 @@ class FocusGuardOptions {
     document
       .getElementById("resetChallenge")
       .addEventListener("click", this.handleResetChallenge.bind(this));
+  }
+
+  async handleSetMasterPassword() {
+    const password = document.getElementById("masterPasswordInput").value;
+
+    if (!password || password.length < 4) {
+      alert("Password must be at least 4 characters long");
+      return;
+    }
+
+    chrome.runtime.sendMessage(
+      {
+        action: "setMasterPassword",
+        password: password,
+      },
+      (response) => {
+        if (response && response.success) {
+          document.getElementById("masterPasswordInput").value = "";
+          this.updatePasswordStatus(true);
+          alert("Master password set successfully!");
+        } else {
+          alert(response ? response.message : "Failed to set password");
+        }
+      }
+    );
+  }
+
+  async updatePasswordStatus(hasPassword = null) {
+    if (hasPassword === null) {
+      const { masterPassword } = await chrome.storage.local.get(
+        "masterPassword"
+      );
+      hasPassword = !!masterPassword;
+    }
+
+    const statusDiv = document.getElementById("passwordStatus");
+    const setBtn = document.getElementById("setMasterPassword");
+
+    if (hasPassword) {
+      statusDiv.innerHTML =
+        '<p style="color: #27ae60; margin-top: 10px;">✅ Master password is set</p>';
+      setBtn.textContent = "Change Password";
+    } else {
+      statusDiv.innerHTML =
+        '<p style="color: #e74c3c; margin-top: 10px;">❌ No master password set - cannot temporarily unblock sites</p>';
+      setBtn.textContent = "Set Password";
+    }
   }
 
   disablePasteOnChallengeInput() {
@@ -116,9 +168,24 @@ class FocusGuardOptions {
         return;
       }
 
-      let durationMs = duration * 60 * 60 * 1000; // Convert to milliseconds
-      if (unit === "days") durationMs *= 24;
-      if (unit === "weeks") durationMs *= 24 * 7;
+      // Calculate duration in milliseconds based on unit
+      let durationMs;
+      switch (unit) {
+        case "minutes":
+          durationMs = duration * 60 * 1000;
+          break;
+        case "hours":
+          durationMs = duration * 60 * 60 * 1000;
+          break;
+        case "days":
+          durationMs = duration * 24 * 60 * 60 * 1000;
+          break;
+        case "weeks":
+          durationMs = duration * 7 * 24 * 60 * 60 * 1000;
+          break;
+        default:
+          durationMs = duration * 60 * 60 * 1000; // Default to hours
+      }
 
       blockedSites.push({ url: cleanUrl, mode: "strict" });
       await chrome.storage.local.set({ blockedSites });
@@ -268,6 +335,7 @@ class FocusGuardOptions {
   }
 
   async loadSettings() {
+    await this.updatePasswordStatus();
     await this.loadBlockedSites();
     await this.loadWhitelist();
     await this.loadFocusSessionStatus();
@@ -275,10 +343,12 @@ class FocusGuardOptions {
   }
 
   async loadBlockedSites() {
-    const { blockedSites, strictBlocks } = await chrome.storage.local.get([
-      "blockedSites",
-      "strictBlocks",
-    ]);
+    const { blockedSites, strictBlocks, temporaryUnblocks } =
+      await chrome.storage.local.get([
+        "blockedSites",
+        "strictBlocks",
+        "temporaryUnblocks",
+      ]);
     const listDiv = document.getElementById("blockedList");
 
     listDiv.innerHTML = "";
@@ -293,18 +363,52 @@ class FocusGuardOptions {
         strictBlocks[site.url].active &&
         new Date(strictBlocks[site.url].expiry) > new Date();
 
+      // Check if temporarily unblocked
+      const isTemporarilyUnblocked =
+        temporaryUnblocks &&
+        temporaryUnblocks[site.url] &&
+        temporaryUnblocks[site.url].active &&
+        new Date(temporaryUnblocks[site.url].expiry) > new Date();
+
       if (isStrictActive) {
         div.classList.add("strict-block");
         const expiry = new Date(strictBlocks[site.url].expiry);
         const remaining = Math.max(0, expiry.getTime() - Date.now());
-        const remainingHours = Math.ceil(remaining / (1000 * 60 * 60));
+
+        // Format remaining time based on duration
+        let remainingText;
+        if (remaining < 60 * 60 * 1000) {
+          // Less than 1 hour
+          const remainingMinutes = Math.ceil(remaining / (1000 * 60));
+          remainingText = `${remainingMinutes}m`;
+        } else if (remaining < 24 * 60 * 60 * 1000) {
+          // Less than 1 day
+          const remainingHours = Math.ceil(remaining / (1000 * 60 * 60));
+          remainingText = `${remainingHours}h`;
+        } else {
+          const remainingDays = Math.ceil(remaining / (1000 * 60 * 60 * 24));
+          remainingText = `${remainingDays}d`;
+        }
 
         div.innerHTML = `
           <div>
             <strong>${site.url}</strong> 
-            <span style="color: #e74c3c;">(STRICT - ${remainingHours}h remaining)</span>
+            <span style="color: #e74c3c;">(STRICT - ${remainingText} remaining)</span>
           </div>
           <button disabled style="opacity: 0.5;">Cannot Remove</button>
+        `;
+      } else if (isTemporarilyUnblocked) {
+        div.classList.add("temp-unblocked");
+        const expiry = new Date(temporaryUnblocks[site.url].expiry);
+        const remaining = Math.max(0, expiry.getTime() - Date.now());
+        const remainingMinutes = Math.ceil(remaining / (1000 * 60));
+
+        div.innerHTML = `
+          <div>
+            <strong>${site.url}</strong> 
+            <span style="color: #27ae60;">(TEMP UNBLOCKED - ${remainingMinutes}m remaining)</span>
+          </div>
+          <button onclick="focusGuardOptions.handleRemoveBlocked('${site.url}')" class="danger">Remove</button>
         `;
       } else {
         div.innerHTML = `
