@@ -219,8 +219,19 @@ class FocusGuardOptions {
       return;
     }
 
+    // Remove from blockedSites array
     const updatedBlocked = blockedSites.filter((site) => site.url !== url);
     await chrome.storage.local.set({ blockedSites: updatedBlocked });
+
+    // Clear any temporary unblocks for this site as well
+    const { temporaryUnblocks } = await chrome.storage.local.get(
+      "temporaryUnblocks"
+    );
+    if (temporaryUnblocks[url]) {
+      delete temporaryUnblocks[url];
+      await chrome.storage.local.set({ temporaryUnblocks });
+    }
+
     await this.loadBlockedSites();
   }
 
@@ -426,8 +437,15 @@ class FocusGuardOptions {
   }
 
   async loadWhitelist() {
-    const { whitelist } = await chrome.storage.local.get("whitelist");
+    const { whitelist, focusSessions } = await chrome.storage.local.get([
+      "whitelist",
+      "focusSessions",
+    ]);
     const listDiv = document.getElementById("whitelistList");
+
+    // Check if focus session is active
+    const activeSessions = Object.values(focusSessions).filter((s) => s.active);
+    const isFocusActive = activeSessions.length > 0;
 
     listDiv.innerHTML = "";
 
@@ -444,6 +462,16 @@ class FocusGuardOptions {
     if (whitelist.length === 0) {
       listDiv.innerHTML = "<p>No whitelisted websites yet.</p>";
     }
+
+    // Add note about focus session management
+    if (isFocusActive) {
+      const noteDiv = document.createElement("div");
+      noteDiv.style.cssText =
+        "background: #e8f5e8; padding: 10px; border-radius: 5px; margin: 10px 0; color: #27ae60; font-size: 14px;";
+      noteDiv.innerHTML =
+        "ℹ️ <strong>Focus Session Active:</strong> Changes to the whitelist will take effect immediately.";
+      listDiv.insertBefore(noteDiv, listDiv.firstChild);
+    }
   }
 
   async loadFocusSessionStatus() {
@@ -459,11 +487,18 @@ class FocusGuardOptions {
       const remaining = Math.max(0, expiry.getTime() - Date.now());
       const remainingMinutes = Math.ceil(remaining / (1000 * 60));
 
+      // Get current whitelist
+      const { whitelist } = await chrome.storage.local.get("whitelist");
+
       statusDiv.innerHTML = `
         <div style="background-color: #d5f4e6; padding: 15px; border-radius: 5px; color: #27ae60;">
           <h4>🎯 Active Focus Session</h4>
           <p><strong>${remainingMinutes}</strong> minutes remaining</p>
-          <p><strong>Allowed sites:</strong> ${session.whitelist.join(", ")}</p>
+          <p><strong>Allowed sites:</strong> ${whitelist.join(", ")}</p>
+          <p style="font-size: 12px; margin-top: 10px;">
+            💡 <strong>Tip:</strong> You can add or remove websites from the whitelist above, 
+            and changes will take effect immediately during this session.
+          </p>
         </div>
       `;
       startBtn.disabled = true;

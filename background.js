@@ -191,25 +191,39 @@ class FocusGuardCore {
         changes.blockedSites ||
         changes.strictBlocks ||
         changes.focusSessions ||
-        changes.temporaryUnblocks
+        changes.temporaryUnblocks ||
+        changes.whitelist ||
+        changes.incognitoBlocked
       ) {
         this.loadBlockingRules();
+
+        // Handle incognito monitoring changes
+        if (changes.incognitoBlocked) {
+          this.monitorIncognito();
+        }
       }
     }
   }
 
   async handleTabUpdate(tabId, changeInfo, tab) {
     if (changeInfo.url) {
-      const { focusSessions } = await chrome.storage.local.get("focusSessions");
+      // Dynamically check focus sessions and whitelist
+      const { focusSessions, whitelist } = await chrome.storage.local.get([
+        "focusSessions",
+        "whitelist",
+      ]);
+
       const activeSessions = Object.values(focusSessions).filter(
         (s) => s.active
       );
 
       if (activeSessions.length > 0) {
-        const isAllowed = this.isUrlInWhitelist(
-          changeInfo.url,
-          activeSessions[0].whitelist
-        );
+        // Always allow extension pages
+        if (changeInfo.url.startsWith(chrome.runtime.getURL(""))) {
+          return;
+        }
+
+        const isAllowed = this.isUrlInWhitelist(changeInfo.url, whitelist);
         if (!isAllowed) {
           chrome.tabs.update(tabId, {
             url: chrome.runtime.getURL("blocked.html?reason=focus"),
@@ -220,13 +234,19 @@ class FocusGuardCore {
   }
 
   async loadBlockingRules() {
-    const { blockedSites, strictBlocks, focusSessions, temporaryUnblocks } =
-      await chrome.storage.local.get([
-        "blockedSites",
-        "strictBlocks",
-        "focusSessions",
-        "temporaryUnblocks",
-      ]);
+    const {
+      blockedSites,
+      strictBlocks,
+      focusSessions,
+      temporaryUnblocks,
+      whitelist,
+    } = await chrome.storage.local.get([
+      "blockedSites",
+      "strictBlocks",
+      "focusSessions",
+      "temporaryUnblocks",
+      "whitelist",
+    ]);
 
     let rules = [];
     let ruleId = 1;
@@ -284,7 +304,13 @@ class FocusGuardCore {
     // Add focus session rules
     const activeSessions = Object.values(focusSessions).filter((s) => s.active);
     if (activeSessions.length > 0) {
-      const session = activeSessions[0];
+      // Get the current whitelist (dynamic)
+      const currentWhitelist = [...whitelist];
+
+      // Always include extension pages in whitelist
+      const extensionUrl = chrome.runtime.getURL("").replace(/\/$/, "");
+      currentWhitelist.push(new URL(extensionUrl).hostname);
+
       rules.push({
         id: ruleId++,
         priority: 3,
@@ -293,7 +319,7 @@ class FocusGuardCore {
           redirect: { url: chrome.runtime.getURL("blocked.html?reason=focus") },
         },
         condition: {
-          excludedDomains: session.whitelist,
+          excludedDomains: currentWhitelist,
           resourceTypes: ["main_frame"],
         },
       });
@@ -316,13 +342,17 @@ class FocusGuardCore {
   }
 
   isUrlInWhitelist(url, whitelist) {
-    const urlObj = new URL(url);
-    const domain = urlObj.hostname.replace(/^www\./, "");
+    try {
+      const urlObj = new URL(url);
+      const domain = urlObj.hostname.replace(/^www\./, "");
 
-    return whitelist.some((allowedDomain) => {
-      const cleanAllowed = allowedDomain.replace(/^www\./, "");
-      return domain === cleanAllowed || domain.endsWith("." + cleanAllowed);
-    });
+      return whitelist.some((allowedDomain) => {
+        const cleanAllowed = allowedDomain.replace(/^www\./, "");
+        return domain === cleanAllowed || domain.endsWith("." + cleanAllowed);
+      });
+    } catch (e) {
+      return false;
+    }
   }
 
   async addStrictBlock(url, duration) {
@@ -372,11 +402,15 @@ class FocusGuardCore {
     focusSessions[sessionId] = {
       active: true,
       expiry: expiry.toISOString(),
-      whitelist: whitelist,
       created: new Date().toISOString(),
     };
 
-    await chrome.storage.local.set({ focusSessions });
+    // Update both focus sessions and whitelist
+    await chrome.storage.local.set({
+      focusSessions,
+      whitelist: whitelist,
+    });
+
     chrome.alarms.create(`focus_${sessionId}`, { when: expiry.getTime() });
 
     return sessionId;
@@ -416,13 +450,20 @@ class FocusGuardCore {
     const { incognitoBlocked } = await chrome.storage.local.get(
       "incognitoBlocked"
     );
+
     if (incognitoBlocked) {
       // Check for existing incognito windows and close them
-      const windows = await chrome.windows.getAll();
-      for (const window of windows) {
-        if (window.incognito) {
-          chrome.windows.remove(window.id);
+      try {
+        const windows = await chrome.windows.getAll();
+        for (const window of windows) {
+          if (window.incognito) {
+            chrome.windows.remove(window.id).catch(() => {
+              // Ignore errors if window already closed
+            });
+          }
         }
+      } catch (error) {
+        console.error("Error monitoring incognito windows:", error);
       }
     }
   }
